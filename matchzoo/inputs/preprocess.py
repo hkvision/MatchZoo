@@ -14,7 +14,7 @@ from nltk.stem import SnowballStemmer
 sys.path.append('../inputs')
 sys.path.append('../utils')
 from preparation import *
-from rank_io import *
+from utils.rank_io import *
 
 
 class Preprocess(object):
@@ -28,16 +28,17 @@ class Preprocess(object):
                  word_stem_config = {},
                  word_lower_config = {},
                  word_filter_config = {},
-                 word_index_config = {}
+                 word_index_config = {},
+                 predict_mode=False
                  ):
         # set default configuration
-        self._word_seg_config = { 'enable': True, 'lang': 'en' }
+        self._word_seg_config = { 'enable': True, 'lang': 'cn' }
         self._doc_filter_config = { 'enable': True, 'min_len': 0, 'max_len': six.MAXSIZE }
-        self._word_stem_config = { 'enable': True }
+        self._word_stem_config = { 'enable': False }
         self._word_lower_config = { 'enable': True }
         self._word_filter_config = { 'enable': True, 'stop_words': nltk_stopwords.words('english'),
                                      'min_freq': 1, 'max_freq': six.MAXSIZE, 'words_useless': None }
-        self._word_index_config = { 'word_dict': None }
+        self._word_index_config = { 'word_dict': dict() }
 
         self._word_seg_config.update(word_seg_config)
         self._doc_filter_config.update(doc_filter_config)
@@ -48,6 +49,8 @@ class Preprocess(object):
 
         self._word_dict = self._word_index_config['word_dict']
         self._words_stats = dict()
+        self._docs_num = 0
+        self._predict_mode = predict_mode
 
     def run(self, file_path):
         print('load...')
@@ -69,15 +72,19 @@ class Preprocess(object):
             print('word_lower...')
             docs = Preprocess.word_lower(docs)
 
-        self._words_stats = Preprocess.cal_words_stat(docs)
-
         if self._word_filter_config['enable']:
             print('word_filter...')
             docs, self._words_useless = Preprocess.word_filter(docs, self._word_filter_config, self._words_stats)
 
-        print('word_index...')
-        docs, self._word_dict = Preprocess.word_index(docs, self._word_index_config)
+        if not self._predict_mode:
+            self._docs_num += len(docs)
+            self._words_stats = self.cal_words_stat(docs)
 
+            print('word_index...')
+            docs, self._word_dict = self.word_index(docs, self._word_index_config)
+
+        # In predict mode for new data, docs is a list of list of tokens
+        # Do the mapping from word to index using give word_dict in predict_preprocess.py
         return dids, docs
 
     @staticmethod
@@ -123,10 +130,9 @@ class Preprocess(object):
         docs = getattr(Preprocess, '%s_%s' % (sys._getframe().f_code.co_name, config['lang']))(docs)
         return docs
 
-    @staticmethod
-    def cal_words_stat(docs):
-        words_stats = {}
-        docs_num = len(docs)
+    def cal_words_stat(self, docs):
+        words_stats = self._words_stats
+        # docs_num = len(docs)
         for ws in docs:
             for w in ws:
                 if w not in words_stats:
@@ -138,7 +144,7 @@ class Preprocess(object):
             for w in set(ws):
                 words_stats[w]['df'] += 1
         for w, winfo in words_stats.items():
-            words_stats[w]['idf'] = np.log( (1. + docs_num) / (1. + winfo['df']))
+            words_stats[w]['idf'] = np.log( (1. + self._docs_num) / (1. + winfo['df']))
         return words_stats
 
     @staticmethod
@@ -176,18 +182,17 @@ class Preprocess(object):
         docs = [[w.lower() for w in ws] for ws in tqdm(docs)]
         return docs
 
-    @staticmethod
-    def build_word_dict(docs):
-        word_dict = dict()
+    def build_word_dict(self, docs):
+        word_dict = self._word_dict
         for ws in docs:
             for w in ws:
-                word_dict.setdefault(w, len(word_dict))
+                if not w.isspace():  # strange u' ' appears
+                    word_dict.setdefault(w, len(word_dict))
         return word_dict
 
-    @staticmethod
-    def word_index(docs, config):
-        if config['word_dict'] is None:
-            config['word_dict'] = Preprocess.build_word_dict(docs)
+    def word_index(self, docs, config):
+        # if config['word_dict'] is None:
+        config['word_dict'] = self.build_word_dict(docs)
         docs = [[config['word_dict'][w] for w in ws if w in config['word_dict']] for ws in tqdm(docs)]
         return docs, config['word_dict']
 
@@ -490,26 +495,33 @@ def _test_hist():
 if __name__ == '__main__':
     #_test_ngram()
     # test with sample data
-    basedir = '../../data/example/ranking/'
-    prepare = Preparation()
-    sample_file = basedir + 'sample.txt'
-    corpus, rels = prepare.run_with_one_corpus(sample_file)
-    print ('total corpus size', len(corpus))
-    print ('total relations size', len(rels))
-    prepare.save_corpus(basedir + 'corpus.txt', corpus)
-    prepare.save_relation(basedir + 'relation.txt', rels)
-    print ('preparation finished ...')
+    basedir = '/home/kai/Documents/matchzoo-data/ms-0831-old/'
+    # prepare = Preparation()
+    # sample_file = basedir + 'sample.txt'
+    # corpus, rels = prepare.run_with_one_corpus(sample_file)
+    # print ('total corpus size', len(corpus))
+    # print ('total relations size', len(rels))
+    # prepare.save_corpus(basedir + 'corpus.txt', corpus)
+    # prepare.save_relation(basedir + 'relation.txt', rels)
+    # print ('preparation finished ...')
 
     print ('begin preprocess...')
     # Prerpocess corpus file
-    preprocessor = Preprocess(min_freq=1)
-    dids, docs = preprocessor.run(basedir + 'corpus.txt')
+    preprocessor = Preprocess()
+    # dids, docs = preprocessor.run(basedir + 'corpus.txt')
+    q_dids, q_docs = preprocessor.run(basedir + 'question_corpus.txt')
+    a_dids, a_docs = preprocessor.run(basedir + 'answer_corpus.txt')
     preprocessor.save_word_dict(basedir + 'word_dict.txt')
     preprocessor.save_words_stats(basedir + 'word_stats.txt')
 
-    fout = open(basedir + 'corpus_preprocessed.txt', 'w')
-    for inum, did in enumerate(dids):
-        fout.write('%s\t%s\n' % (did, ' '.join(map(str, docs[inum]))))
+    fout = open(basedir + 'question_corpus_preprocessed.txt', 'w')
+    for inum, did in enumerate(q_dids):
+        fout.write('%s\t%s\n' % (did, ' '.join(map(str, q_docs[inum]))))
+    fout.close()
+
+    fout = open(basedir + 'answer_corpus_preprocessed.txt', 'w')
+    for inum, did in enumerate(a_dids):
+        fout.write('%s\t%s\n' % (did, ' '.join(map(str, a_docs[inum]))))
     fout.close()
     print('preprocess finished ...')
 

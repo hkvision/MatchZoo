@@ -262,13 +262,20 @@ class Preparation(object):
 
 if __name__ == '__main__':
     prepare = Preparation()
-    basedir = '../../data/example/ranking/'
-    corpus, rels = prepare.run_with_one_corpus(basedir + 'sample.txt')
-    print('total corpus : %d ...' % (len(corpus)))
+    basedir = '/home/kai/Documents/matchzoo-data/ms-0831-old/'
+    # corpus, rels = prepare.run_with_one_corpus(basedir + 'sample.txt')
+    question_corpus, answer_corpus, rels = prepare.run_with_two_corpus(basedir + 'sample.txt')
+    print('total question corpus : %d ...' % (len(question_corpus)))
+    print('total answer corpus : %d ...' % (len(answer_corpus)))
+    # print('total corpus : %d ...' % (len(corpus)))
     print('total relations : %d ...' % (len(rels)))
-    prepare.save_corpus(basedir + 'corpus.txt', corpus)
+    prepare.save_corpus(basedir + 'question_corpus.txt', question_corpus)
+    prepare.save_corpus(basedir + 'answer_corpus.txt', answer_corpus)
 
-    rel_train, rel_valid, rel_test = prepare.split_train_valid_test(rels, (0.8, 0.1, 0.1))
+    # rel_train, rel_valid, rel_test = prepare.split_train_valid_test(rels, (0.9, 0.05, 0.05))
+    rel_train = rels[:-54]
+    rel_valid = rels[-54:]
+    rel_test = rel_valid
     prepare.save_relation(basedir + 'relation_train.txt', rel_train)
     prepare.save_relation(basedir + 'relation_valid.txt', rel_valid)
     prepare.save_relation(basedir + 'relation_test.txt', rel_test)

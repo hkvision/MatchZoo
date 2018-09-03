@@ -38,7 +38,11 @@ def load_model(config):
         model_config.update(config['inputs']['share'])
         sys.path.insert(0, config['model']['model_path'])
 
-        model = import_object(config['model']['model_py'], model_config)
+        # model = import_object(config['model']['model_py'], model_config)
+        # from models.drmm import DRMM
+        # model = DRMM(model_config)
+        from models.knrm import KNRM
+        model = KNRM(model_config)
         mo = model.build()
     return mo
 
